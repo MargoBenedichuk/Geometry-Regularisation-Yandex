@@ -14,9 +14,7 @@ geometric-regularization/
 
 │   │   ├── datasets.py         # Dataset-классы и описание входных данных
 
-│   │   ├── loaders.py          # DataLoader, collate-функции
-
-│   │   └── splits.py           # Генерация train/val/test сплитов
+│   │   └── loaders.py          # DataLoader, collate-функции
 
 │   ├── utils/              # Общие утилиты
 
