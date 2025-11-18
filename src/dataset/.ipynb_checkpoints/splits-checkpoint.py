@@ -8,7 +8,7 @@ def make_classification_splits(
     dataset: Dataset,
     val_ratio: float = 0.2,
     stratified: bool = True,
-    target_type: Literal['int'] 'int',
+    target_type: Literal['int'] ='int',
     seed: int = 42,
     shuffle: bool = True
 ):
