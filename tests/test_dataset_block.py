@@ -3,11 +3,13 @@ import pytest
 import torch
 from torch.utils.data import Dataset, DataLoader
 from src.dataset.datasets import ClassificationDataset
-from src.dataset.loaders import make_dataloader, collate_by_class
+from src.dataset.dataloader import make_dataloader, collate_by_class
 from src.dataset.splits import make_classification_splits
 from torchvision.datasets import MNIST
 from torchvision import transforms
 import os
+import sys, os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 
 def get_dummy_dataset():

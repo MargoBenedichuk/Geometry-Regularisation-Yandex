@@ -3,6 +3,9 @@ import torch
 from src.models.cnns import SimpleCNN
 from src.models.head_factory import get_head
 import torch.nn as nn
+import sys, os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+
 
 def test_simplecnn_forward():
     model = SimpleCNN(input_shape=(1, 28, 28), hidden_dim=64, num_classes=10)
