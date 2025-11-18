@@ -28,10 +28,66 @@ model:
 
 # === Regularization ===
 regularization:
-  type: "geometric"                # geometric | topological | baseline
-  weight: 1.0                      # Lambda weight on reg loss
-  metric: "spectral_entropy"      # local_dim | spectral_entropy | geodesic
-  knn_k: 10
+  type: "geodesic_ratio"            # geodesic_ratio | isometric | manifold | topological | baseline
+  enabled: true                     # Включить/выключить регуляризацию
+
+  # Параметры для Geodesic Ratio Regularizer
+  geodesic_ratio:
+    lambda_reg: 0.01                # Вес регуляризации
+    target_ratio: 1.0               # Целевое отношение geodesic/euclidean
+                                    # 1.0 = плоское многообразие
+                                    # >1.0 = искривленное многообразие
+    n_neighbors: 10                 # Количество ближайших соседей для графа
+                                    # Рекомендация: sqrt(batch_size) или 5-15
+
+    # Частота применения регуляризации
+    apply_every_n_steps: 1          # Применять каждые N шагов (1 = каждый шаг)
+    start_epoch: 0                  # С какой эпохи начинать регуляризацию
+
+    # Стратегия семплирования для вычисления
+    sampling_strategy: "batch"      # batch | random_pairs | stratified
+    num_samples: null               # Количество пар для random_pairs (null = все)
+
+    # Численная стабильность
+    eps: 1e-6                       # Epsilon для избежания деления на ноль
+    max_geodesic: 1e6               # Максимальное геодезическое расстояние (обрезка inf)
+
+  # Альтернативные метрики (для экспериментов)
+  metric: "geodesic_ratio"          # geodesic_ratio | local_dim | spectral_entropy
+  knn_k: 10                         # Для других метрик
+
+# === Loss Function ===
+loss:
+  classification: "cross_entropy"   # cross_entropy | focal | label_smoothing
+  label_smoothing: 0.0              # Значение для label smoothing (0.0 = off)
+
+  # Веса компонент функции потерь
+  weights:
+    classification: 1.0             # Вес classification loss
+    regularization: 1.0             # Общий вес регуляризации (умножается на lambda_reg)
+
+# === Metrics ===
+metrics:
+  # Метрики для оценки во время обучения
+  train:
+    - "accuracy"
+    - "loss"
+    - "geodesic_ratio"
+
+  val:
+    - "accuracy"
+    - "loss"
+    - "geodesic_ratio"
+    - "embedding_quality"           # Доп. метрики качества представлений
+
+  embedding_metrics:
+    enabled: true
+    compute_every_n_epochs: 5       # Вычислять каждые N эпох (дорого)
+    metrics:
+      - "silhouette_score"          # Качество кластеризации
+      - "trustworthiness"           # Сохранение локальной структуры
+      - "geodesic_ratio_mean"       # Среднее отношение
+      - "geodesic_ratio_std"        # Стандартное отклонение
 
 # === Logging and Output ===
 logging:
