@@ -16,6 +16,9 @@ from src.metrics.task import compute_classification_metrics
 from src.regularization.geometric_loss import compute_geometric_loss
 from src.utils.registry import default_mnist_transform, resolve_target
 from src.vizualisation.vizualisator import save_interactive_projection, save_umap_projection
+from src.metrics.geodesic_metrics import compute_de
+from src.metrics.geometry import compute_geometry_summary
+from src.vizualisation.vizualisator import save_umap_projection
 
 
 def run_experiment(cfg_path: str, exp_dir: str):
