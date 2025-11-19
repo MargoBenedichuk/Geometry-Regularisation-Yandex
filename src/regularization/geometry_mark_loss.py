@@ -290,7 +290,6 @@ def compute_geometric_loss(
             return loss
 
         else:
-            print(f"[WARNING] Unknown geometric regularizer: {metric}, returning zero loss")
             return torch.zeros(1, device=embeddings.device, dtype=embeddings.dtype)
 
     except Exception as e:
