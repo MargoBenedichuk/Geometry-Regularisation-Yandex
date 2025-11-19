@@ -16,9 +16,8 @@ from src.metrics.task import compute_classification_metrics
 from src.regularization.geometric_loss import compute_geometric_loss
 from src.utils.registry import default_mnist_transform, resolve_target
 from src.vizualisation.vizualisator import save_interactive_projection, save_umap_projection
-from src.metrics.geodesic_metrics import compute_de
+from src.metrics.geodesic import compute_geodesic_summary
 from src.metrics.geometry import compute_geometry_summary
-from src.vizualisation.vizualisator import save_umap_projection
 
 
 def run_experiment(cfg_path: str, exp_dir: str):
@@ -137,7 +136,7 @@ def run_experiment(cfg_path: str, exp_dir: str):
         metrics_path = os.path.join(exp_dir, "metrics.json")
         metrics = compute_classification_metrics(logits, targets, save_path=metrics_path)
 
-        # === 5. Геометрический анализ ===
+        # === 5. Сбор латентных представлений ===
         latent_vectors = []
         with torch.no_grad():
             for xb, _ in val_loader:
@@ -146,25 +145,81 @@ def run_experiment(cfg_path: str, exp_dir: str):
                 latent_vectors.append(z.cpu())
 
         latent_all = torch.cat(latent_vectors, dim=0).numpy()
-        # === 5. Визуализация ===
-        umap_img_path = os.path.join(exp_dir, "umap.png")
-        save_umap_projection(latent_all, targets.numpy(), umap_img_path)
-        interactive_path = os.path.join(exp_dir, "latents_interactive.html")
-        save_interactive_projection(latent_all, targets.numpy(), interactive_path, fallback_image=umap_img_path)
-        npz_path = os.path.join(exp_dir, "latents.npz")
-        np.savez(npz_path, latents=latent_all, labels=targets.numpy())
+        targets_np = targets.numpy()
 
-        # === 6. Логирование ===
+        # === 6. Геометрический анализ ===
+        print("[INFO] Computing geometry summary...")
+        geometry_summary = compute_geometry_summary(latent_all, targets_np)
+        geometry_path = os.path.join(exp_dir, "geometry_summary.json")
+        with open(geometry_path, "w") as f:
+            json.dump(geometry_summary, f, indent=2)
+
+        # === 7. Геодезический анализ ===
+        print("[INFO] Computing geodesic summary...")
+        # Получаем n_neighbors из конфига или используем значение по умолчанию
+        n_neighbors = getattr(
+            getattr(cfg.regularization, 'geodesic_ratio', None),
+            'n_neighbors',
+            10
+        )
+        geodesic_summary = compute_geodesic_summary(
+            latent_all,
+            targets_np,
+            n_neighbors=n_neighbors
+        )
+        geodesic_path = os.path.join(exp_dir, "geodesic_summary.json")
+        with open(geodesic_path, "w") as f:
+            json.dump(geodesic_summary, f, indent=2)
+
+        # === 8. Визуализация ===
+        print("[INFO] Creating visualizations...")
+        umap_img_path = os.path.join(exp_dir, "umap.png")
+        save_umap_projection(latent_all, targets_np, umap_img_path)
+
+        interactive_path = os.path.join(exp_dir, "latents_interactive.html")
+        save_interactive_projection(latent_all, targets_np, interactive_path, fallback_image=umap_img_path)
+
+        npz_path = os.path.join(exp_dir, "latents.npz")
+        np.savez(npz_path, latents=latent_all, labels=targets_np)
+
+        # === 9. Логирование в MLflow ===
         for k, v in metrics.items():
             mlflow.log_metric(f"val/{k}", float(v))
+
+        # Геометрические метрики
+        if 'local_dimension' in geometry_summary:
+            mlflow.log_metric("geometry/local_dim_mean", geometry_summary['local_dimension']['mean'])
+            mlflow.log_metric("geometry/local_dim_std", geometry_summary['local_dimension']['std'])
+        if 'silhouette_score' in geometry_summary:
+            mlflow.log_metric("geometry/silhouette_score", geometry_summary['silhouette_score'])
+        if 'trustworthiness' in geometry_summary:
+            mlflow.log_metric("geometry/trustworthiness", geometry_summary['trustworthiness'])
+
+        # Геодезические метрики
+        if 'global' in geodesic_summary:
+            mlflow.log_metric("geodesic/global_mean", geodesic_summary['global']['mean'])
+            mlflow.log_metric("geodesic/global_std", geodesic_summary['global']['std'])
+            mlflow.log_metric("geodesic/global_median", geodesic_summary['global']['median'])
+        if 'inter_class' in geodesic_summary:
+            mlflow.log_metric("geodesic/inter_class_mean", geodesic_summary['inter_class']['mean'])
+        if 'analysis' in geodesic_summary:
+            mlflow.log_metric("geodesic/flatness_score", geodesic_summary['analysis']['flatness_score'])
+            mlflow.log_metric("geodesic/separability_ratio", geodesic_summary['analysis']['class_separability_ratio'])
+            mlflow.log_metric("geodesic/quality_score", geodesic_summary['analysis']['overall_quality_score'])
+
         mlflow.log_artifact(metrics_path)
+        mlflow.log_artifact(geometry_path)
+        mlflow.log_artifact(geodesic_path)
         mlflow.log_artifact(umap_img_path)
         mlflow.log_artifact(interactive_path)
         mlflow.log_artifact(npz_path)
 
+        print(f"[INFO] Experiment completed. Results saved to {exp_dir}")
+
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) != 3:
         print("Usage: python -m src.runners.run_clf_base <CONFIG_PATH> <EXP_DIR>")
         exit(1)
