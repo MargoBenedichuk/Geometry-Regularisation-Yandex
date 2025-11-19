@@ -5,8 +5,6 @@ import numpy as np
 from sklearn.metrics import silhouette_score
 from sklearn.manifold import trustworthiness
 
-from src.metrics.geodesic_metrics import GeodesicMetric
-
 
 class LocalIntrinsicDimension:
     """Вычисление локальной внутренней размерности."""
@@ -58,62 +56,70 @@ class LocalIntrinsicDimension:
         return np.array(local_dims)
 
 
-def compute_geometry_summary(embeddings, labels):
+def compute_geometry_summary(embeddings, labels, k=10):
     """
-    Вычисляет полную геометрическую статистику пространства представлений.
+    Вычисляет геометрическую статистику пространства представлений.
+    ТОЛЬКО локальная размерность, silhouette и trustworthiness.
 
     Args:
-        embeddings: np.ndarray (n_samples, embedding_dim)
-        labels: np.ndarray (n_samples,)
+        embeddings: np.ndarray (n_samples, embedding_dim) или torch.Tensor
+        labels: np.ndarray (n_samples,) или torch.Tensor
+        k: количество соседей для локальной размерности
 
     Returns:
-        dict: полная статистика
+        dict: геометрическая статистика
     """
+    if isinstance(embeddings, torch.Tensor):
+        embeddings = embeddings.cpu().numpy()
+    if isinstance(labels, torch.Tensor):
+        labels = labels.cpu().numpy()
+
     summary = {}
 
     # === 1. Локальная размерность ===
-    local_dims = LocalIntrinsicDimension.compute(embeddings, k=10)
-    summary['local_dimension'] = {
-        'mean': float(np.mean(local_dims)),
-        'std': float(np.std(local_dims)),
-        'min': float(np.min(local_dims)),
-        'max': float(np.max(local_dims))
-    }
+    try:
+        local_dims = LocalIntrinsicDimension.compute(embeddings, k=k)
+        summary['local_dimension'] = {
+            'mean': float(np.mean(local_dims)),
+            'std': float(np.std(local_dims)),
+            'min': float(np.min(local_dims)),
+            'max': float(np.max(local_dims)),
+            'median': float(np.median(local_dims))
+        }
+    except Exception as e:
+        print(f"Warning: Failed to compute local dimension: {e}")
+        summary['local_dimension'] = {
+            'mean': 1.0,
+            'std': 0.0,
+            'min': 1.0,
+            'max': 1.0,
+            'median': 1.0
+        }
 
-    # === 2. Геодезические расстояния ===
-    geo_metric = GeodesicMetric(n_neighbors=10)
-
-    # Глобальная статистика
-    geo_global = geo_metric.compute_global_stats(embeddings)
-    summary['geodesic_global'] = geo_global
-
-    # Поклассовая статистика
-    geo_class = geo_metric.compute_class_wise_stats(embeddings, labels)
-    summary['geodesic_class_wise'] = geo_class
-
-    # Межклассовая статистика
-    geo_inter = geo_metric.compute_inter_class_stats(embeddings, labels)
-    summary['geodesic_inter_class'] = geo_inter
-
-    # === 3. Качество кластеризации ===
+    # === 2. Silhouette Score (качество кластеризации) ===
     if len(np.unique(labels)) > 1 and len(embeddings) > 1:
         try:
             silhouette = silhouette_score(embeddings, labels)
             summary['silhouette_score'] = float(silhouette)
-        except:
+        except Exception as e:
+            print(f"Warning: Failed to compute silhouette score: {e}")
             summary['silhouette_score'] = 0.0
     else:
         summary['silhouette_score'] = 0.0
 
-    # === 4. Trustworthiness (сохранение локальной структуры) ===
+    # === 3. Trustworthiness (сохранение локальной структуры) ===
     try:
-        # Trustworthiness измеряет, насколько хорошо сохранена локальная структура
-        trust = trustworthiness(embeddings, embeddings, n_neighbors=min(10, len(embeddings) - 1))
-        summary['trustworthiness'] = float(trust)
-    except:
+        k_trust = min(k, len(embeddings) - 1)
+        if k_trust > 0:
+            trust = trustworthiness(embeddings, embeddings, n_neighbors=k_trust)
+            summary['trustworthiness'] = float(trust)
+        else:
+            summary['trustworthiness'] = 0.0
+    except Exception as e:
+        print(f"Warning: Failed to compute trustworthiness: {e}")
         summary['trustworthiness'] = 0.0
 
-    # === 5. Общая информация ===
+    # === 4. Общая информация ===
     summary['num_samples'] = int(len(embeddings))
     summary['embedding_dim'] = int(embeddings.shape[1])
     summary['num_classes'] = int(len(np.unique(labels)))
