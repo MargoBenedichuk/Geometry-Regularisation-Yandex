@@ -1,10 +1,9 @@
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, recall_score, precision_score, confusion_matrix
+from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, recall_score, precision_score
 from typing import Dict, Union
 import numpy as np
 import json
-
 
 def compute_classification_metrics(
     logits: torch.Tensor,
@@ -14,7 +13,7 @@ def compute_classification_metrics(
 ) -> Dict[str, float]:
     """
     Вычисляет базовые метрики качества классификации:
-    Accuracy, AUC, F1, Sensitivity (Recall), Specificity.
+    Accuracy, AUC, F1 (macro), Recall (macro), Precision (macro).
 
     :param logits: сырой выход модели (до softmax), shape [B, C]
     :param targets: ground truth метки, shape [B]
@@ -31,12 +30,6 @@ def compute_classification_metrics(
     recall = recall_score(y_true, y_pred, average=average)
     precision = precision_score(y_true, y_pred, average=average)
 
-    # Sensitivity == recall, Specificity — через confusion matrix
-    cm = confusion_matrix(y_true, y_pred)
-    tn = np.diag(cm).sum() - np.trace(cm)  # сумма диагонали минус TP всех классов
-    fp_fn = cm.sum(axis=1) + cm.sum(axis=0) - 2 * np.diag(cm)
-    specificity = tn / (tn + fp_fn.sum() - tn + 1e-8)
-
     try:
         auc = roc_auc_score(y_true, y_prob, multi_class="ovr", average=average)
     except ValueError:
@@ -46,8 +39,7 @@ def compute_classification_metrics(
         "accuracy": acc,
         "auc": auc,
         "f1": f1,
-        "sensitivity": recall,
-        "specificity": specificity,
+        "recall": recall,
         "precision": precision
     }
 

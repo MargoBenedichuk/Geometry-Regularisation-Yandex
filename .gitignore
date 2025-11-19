@@ -1,0 +1,26 @@
+./.ipynb_checkpoints
+
+./yandex_studcamp_project.egg-info
+
+src/utils/__pycache__/
+yandex_studcamp_project.egg-info/
+.ipynb_checkpoints/
+src/metrics/__pycache__/
+src/yandex_studcamp_project.egg-info/
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# JetBrains IDEs (PyCharm, IntelliJ)
+.idea/
+
+# Data files
+data/MNIST/raw/*.ubyte

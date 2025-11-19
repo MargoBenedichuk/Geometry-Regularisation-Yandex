@@ -1,6 +1,4 @@
-# configs/defaults.yaml
-
-experiment_name: "mnist_geo"
+experiment_name: "mnist_geom"
 seed: 42
 device: "cuda"
 
