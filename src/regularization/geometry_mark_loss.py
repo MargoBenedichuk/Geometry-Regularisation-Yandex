@@ -269,7 +269,7 @@ def compute_geometric_loss(
     target_uniformity = getattr(cfg, "target_uniformity", 0.5)
 
     try:
-        if metric in {"local_dimension", "dimension", "uniformity"}:
+        if metric in {"local_dimension", "dimension", "uniformity", "geometric_mark"}:
             regularizer = LocalDimensionRegularizer(
                 target_dimension=target_dim,
                 n_neighbors=n_neighbors,
