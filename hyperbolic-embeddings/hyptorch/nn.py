@@ -7,6 +7,15 @@ import torch.nn.init as init
 import hyptorch.pmath as pmath
 
 
+def geometricReg(x, _lambda=1.0, c=1.0, keepdim=True):
+    if _lambda == 0:
+        return 0
+    _mean_norm = 0
+    for i in range(x.shape[0]):
+        _mean_norm += pmath.dist0(x[i], c=c, keepdim=keepdim)
+    return _lambda * (x.shape[0] / _mean_norm)
+
+
 class HyperbolicMLR(nn.Module):
     r"""
     Module which performs softmax classification

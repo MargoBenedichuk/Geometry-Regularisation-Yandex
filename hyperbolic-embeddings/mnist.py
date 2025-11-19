@@ -10,6 +10,8 @@ from torchvision import datasets, transforms
 
 import hyptorch.nn as hypnn
 
+import matplotlib.pyplot as plt
+
 
 class Net(nn.Module):
     def __init__(self, args):
@@ -32,16 +34,18 @@ class Net(nn.Module):
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         x = self.tp(x)
-        return F.log_softmax(self.mlr(x, c=self.tp.c), dim=-1)
+        return (x, F.log_softmax(self.mlr(x, c=self.tp.c), dim=-1))
 
 
-def train(args, model, device, train_loader, optimizer, epoch):
+def train(args, model, criterion, device, train_loader, optimizer, epoch):
     model.train()
+
+    losses = []
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
-        output = model(data)
-        loss = F.nll_loss(output, target)
+        embedding, output = model(data)
+        loss = criterion(output, target) + hypnn.geometricReg(embedding, _lambda=args.lambda1, c=args.c)
         loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
@@ -54,18 +58,20 @@ def train(args, model, device, train_loader, optimizer, epoch):
                     loss.item(),
                 )
             )
+        losses.append(loss.item())
+    return losses
 
 
-def test(args, model, device, test_loader):
+def test(args, model, criterion, device, test_loader):
     model.eval()
     test_loss = 0
     correct = 0
     with torch.no_grad():
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
-            output = model(data)
-            test_loss += F.nll_loss(
-                output, target, reduction="sum"
+            _, output = model(data)
+            test_loss += criterion(
+                output, target
             ).item()  # sum up batch loss
             pred = output.argmax(
                 dim=1, keepdim=True
@@ -82,6 +88,8 @@ def test(args, model, device, test_loader):
             100.0 * correct / len(test_loader.dataset),
         )
     )
+
+    return test_loss, correct / len(test_loader.dataset)
 
 
 def main():
@@ -140,6 +148,9 @@ def main():
         "--c", type=float, default=1.0, help="Curvature of the Poincare ball"
     )
     parser.add_argument(
+        "--lambda1", type=float, default=1.0, help="Lambda parameter for regularization"
+    )
+    parser.add_argument(
         "--dim", type=int, default=2, help="Dimension of the Poincare ball"
     )
     parser.add_argument(
@@ -153,6 +164,9 @@ def main():
         action="store_true",
         default=False,
         help="train the Poincare ball curvature",
+    )
+    parser.add_argument(
+        "--savefig", default="plot.png"
     )
 
     args = parser.parse_args()
@@ -192,9 +206,34 @@ def main():
     model = Net(args).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
+    losses = []
+    val_accuracy = []
+    val_loss = []
     for epoch in range(1, args.epochs + 1):
-        train(args, model, device, train_loader, optimizer, epoch)
-        test(args, model, device, test_loader)
+        ls = train(args, model, nn.NLLLoss(), device, train_loader, optimizer, epoch)
+        v, a = test(args, model, nn.NLLLoss(reduction='sum'), device, test_loader)
+        losses += ls
+        val_accuracy.append(a)
+        val_loss.append(v)
+
+    idx = list(range(len(val_loss)))
+    idx2 = list(range(len(losses)))
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 6))
+
+    ax = axes.flatten()
+    ax[0].plot(idx2, losses, label="Лосс на трейне")
+    ax[0].set_xlabel("Итерация")
+    ax[0].legend()
+
+    ax[1].plot(idx, val_loss, label="Лосс на тесте")
+    ax[1].set_xlabel("Эпоха")
+    ax[1].legend()
+
+    ax[2].plot(idx, val_accuracy, label="Акураси на тесте")
+    ax[2].set_xlabel("Эпоха")
+    ax[2].legend()
+    fig.savefig(args.savefig)
 
     if args.save_model:
         torch.save(model.state_dict(), "mnist_cnn.pt")
