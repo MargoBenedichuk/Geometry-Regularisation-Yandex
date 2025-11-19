@@ -131,7 +131,6 @@ def compute_geodesic_loss(
     if weight == 0:
         return torch.zeros(1, device=embeddings.device, dtype=embeddings.dtype)
 
-    # Диспетчер по типам геодезических регуляризаторов
     if metric in {"geodesic", "geodesic_ratio"}:
         geo_cfg = getattr(cfg, "geodesic_ratio", {})
         n_neighbors = getattr(geo_cfg, "n_neighbors", 10)
@@ -145,6 +144,4 @@ def compute_geodesic_loss(
             lambda_reg=lambda_reg
         )
 
-    # Неизвестная метрика
-    print(f"[WARNING] Unknown geodesic regularization metric: {metric}, returning zero loss")
     return torch.zeros(1, device=embeddings.device, dtype=embeddings.dtype)
