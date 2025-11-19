@@ -1,8 +1,9 @@
 
 # src/dataset/loaders.py
-from torch.utils.data import DataLoader, Dataset
-from typing import Optional, Callable
 from collections import defaultdict
+from typing import Callable, Optional
+
+from torch.utils.data import DataLoader, Dataset
 
 
 def collate_by_class(batch):
