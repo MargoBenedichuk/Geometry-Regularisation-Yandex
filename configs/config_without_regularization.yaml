@@ -1,0 +1,36 @@
+# Configuration for experiment WITHOUT regularization (CE only)
+experiment_name: "geodesic_vs_ce_baseline"
+device: "cuda"
+seed: 42
+
+# Dataset configuration
+dataset:
+  base: "torchvision.datasets.MNIST"
+  root: "./data"
+  train: true
+  download: true
+  transform: "src.utils.registry.default_mnist_transform"
+  val_ratio: 0.2
+  balanced_dataset:
+    n_classes: 10
+    n_samples: 5
+    seed: 42
+
+# Model configuration
+model:
+  input_shape: [1, 28, 28]
+  hidden_dim: 64
+  num_classes: 10
+
+# Training configuration
+train:
+  epochs: 20
+  batch_size: 50
+  lr: 0.001
+
+# Regularization configuration - DISABLED (CE only)
+regularization:
+  weight: 0.0  # Weight set to zero - no regularization
+  metric: "none"
+  type: "none"
+  temperature: 0.1
