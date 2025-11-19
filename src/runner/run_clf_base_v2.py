@@ -134,7 +134,7 @@ def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
                 loss_geom = compute_geometric_loss(latents, labels=yb, cfg=cfg.regularization)
 
                 # Total loss
-                loss = loss_ce + cfg.regularization.weight * loss_geod
+                loss = loss_ce + cfg.regularization.weight * loss_geod + cfg.regularization.weight * loss_geom
                 
                 optimizer.zero_grad()
                 loss.backward()
@@ -204,7 +204,7 @@ def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
         print("[INFO] Computing final metrics...")
         model.eval()
         all_logits, all_targets, all_latents = [], [], []
-        
+
         with torch.no_grad():
             for xb, yb in val_loader:
                 xb = xb.to(device)
