@@ -24,7 +24,7 @@ model:
 
 # Training configuration
 train:
-  epochs: 20
+  epochs: 1
   batch_size: 50
   lr: 0.001
 

@@ -14,7 +14,7 @@ from src.models.cnns import SimpleCNN
 from src.models.head_factory import get_head
 from src.metrics.task import compute_classification_metrics
 from src.regularizers.geometric_loss import compute_geometric_loss
-from src.metrics.geometry import compute_geometry_summary
+from src.metrics.geometry_mark import compute_geometry_summary
 from src.vizualisation.vizualisator import save_umap_projection
 
 
