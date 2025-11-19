@@ -48,18 +48,11 @@ class GeodesicRatioRegularizer(nn.Module):
             return torch.tensor(0.0, device=embeddings.device, dtype=embeddings.dtype)
 
         try:
-            ratios, mask = self.computer.compute_ratios(X_np)
-
-            # Извлекаем только верхний треугольник (уникальные пары)
-            upper_triangle = np.triu_indices(n_samples, k=1)
-            valid_ratios = ratios[upper_triangle][mask[upper_triangle]]
-
-            if len(valid_ratios) == 0:
+            ratios = self.computer.compute_ratios_efficient(X_np)
+            if len(ratios) == 0:
                 return torch.tensor(0.0, device=embeddings.device, dtype=embeddings.dtype)
 
-            loss = np.mean((valid_ratios - self.target_ratio) ** 2)
-
-            # Возвращаем взвешенный штраф как torch.Tensor
+            loss = np.mean((ratios - self.target_ratio) ** 2)
             return torch.tensor(loss, device=embeddings.device, dtype=embeddings.dtype) * self.lambda_reg
 
         except Exception as e:
