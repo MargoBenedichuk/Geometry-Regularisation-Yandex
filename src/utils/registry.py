@@ -7,7 +7,6 @@ from typing import Any, Callable, Dict, Optional, Union
 from omegaconf import DictConfig, OmegaConf
 from torchvision import datasets, transforms
 
-
 def get_mnist(
     root: str = "./data",
     train: bool = True,
@@ -15,7 +14,6 @@ def get_mnist(
     transform=None,
 ):
     return datasets.MNIST(root=root, train=train, download=download, transform=transform)
-
 
 def get_cifar10(
     root: str = "./data",
@@ -25,13 +23,19 @@ def get_cifar10(
 ):
     return datasets.CIFAR10(root=root, train=train, download=download, transform=transform)
 
+def get_imagenet(
+    root: str = "./data/imagenet",
+    train: bool = True,
+    transform=None,
+):
+    split = "train" if train else "val"
+    return datasets.ImageNet(root=root, split=split, transform=transform)
 
 def default_mnist_transform():
     return transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.1307,), (0.3081,)),
     ])
-
 
 def resolve_target(target_like: Union[str, Callable, Dict[str, Any], DictConfig, None]) -> Optional[Callable]:
     """Convert a string/DictConfig reference to a callable.
@@ -40,7 +44,6 @@ def resolve_target(target_like: Union[str, Callable, Dict[str, Any], DictConfig,
     that already are callables. Dict-like specs should contain ``target`` and
     optionally ``params`` describing keyword arguments.
     """
-
     if target_like is None:
         return None
     if callable(target_like):
@@ -67,10 +70,10 @@ def resolve_target(target_like: Union[str, Callable, Dict[str, Any], DictConfig,
 
     raise TypeError(f"Unsupported target specification: {type(target_like)!r}")
 
-
 __all__ = [
     "get_mnist",
     "get_cifar10",
+    "get_imagenet",
     "default_mnist_transform",
     "resolve_target",
 ]
