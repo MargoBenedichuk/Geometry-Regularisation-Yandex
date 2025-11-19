@@ -1,3 +1,4 @@
+# src/regularization/geometric_loss.py
 from __future__ import annotations
 
 from typing import Optional
@@ -7,9 +8,9 @@ import torch.nn.functional as F
 
 
 def info_nce_sigmoid_regularizer(
-    embeddings: torch.Tensor,
-    labels: torch.Tensor,
-    temperature: float = 0.1,
+        embeddings: torch.Tensor,
+        labels: torch.Tensor,
+        temperature: float = 0.1,
 ) -> torch.Tensor:
     z = F.normalize(embeddings, dim=1)
     sim = torch.matmul(z, z.T) / temperature
@@ -18,13 +19,10 @@ def info_nce_sigmoid_regularizer(
     diag_mask = torch.eye(same.size(0), dtype=torch.bool, device=same.device)
     same = same & ~diag_mask
     diff = (~same) & ~diag_mask
-
     pos_logits = sim[same]
     neg_logits = sim[diff]
-
     if pos_logits.numel() == 0 or neg_logits.numel() == 0:
         return torch.zeros(1, device=embeddings.device, dtype=embeddings.dtype)
-
     logits = torch.cat([pos_logits, neg_logits], dim=0)
     targets = torch.cat([
         torch.ones_like(pos_logits),
@@ -58,9 +56,9 @@ def _spectral_entropy(embeddings: torch.Tensor, eps: float = 1e-6) -> torch.Tens
 
 
 def compute_geometric_loss(
-    embeddings: torch.Tensor,
-    labels: torch.Tensor,
-    cfg: Optional[object] = None,
+        embeddings: torch.Tensor,
+        labels: torch.Tensor,
+        cfg: Optional[object] = None,
 ) -> torch.Tensor:
     """Dispatch geometric regularizers based on the config block."""
 
@@ -68,6 +66,13 @@ def compute_geometric_loss(
         return torch.zeros(1, device=embeddings.device, dtype=embeddings.dtype)
 
     metric = getattr(cfg, "metric", "info_nce") or "info_nce"
+    # If metric is "none" or empty, return zero loss
+    if metric is None or metric == "none" or metric == "":
+        return torch.zeros(1, device=embeddings.device, dtype=embeddings.dtype)
+
+    weight = getattr(cfg, "weight", 0.1)
+    if weight == 0:
+        return torch.zeros(1, device=embeddings.device, dtype=embeddings.dtype)
     temperature = getattr(cfg, "temperature", 0.1)
 
     if metric in {"info_nce", "contrastive", "geodesic"} or getattr(cfg, "type", "") == "geometric":
@@ -77,4 +82,6 @@ def compute_geometric_loss(
     if metric in {"compactness", "local_dim"}:
         return _class_compactness(embeddings, labels)
 
-    raise ValueError(f"Unsupported regularization metric: {metric}")
+    # Default: return zero loss if metric is unknown
+    print(f"[WARNING] Unknown regularization metric: {metric}, returning zero loss")
+    return torch.zeros(1, device=embeddings.device, dtype=embeddings.dtype)
