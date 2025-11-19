@@ -1,0 +1,34 @@
+experiment_name: geodesic_vs_ce_with_geodesic
+device: cuda
+seed: 42
+dataset:
+  base: torchvision.datasets.MNIST
+  root: ./data
+  train: true
+  download: true
+  transform: src.utils.registry.default_mnist_transform
+  val_ratio: 0.2
+  balanced_dataset:
+    n_classes: 10
+    n_samples: 5
+    seed: 42
+model:
+  input_shape:
+  - 1
+  - 28
+  - 28
+  hidden_dim: 64
+  num_classes: 10
+train:
+  epochs: 20
+  batch_size: 50
+  lr: 0.001
+regularization:
+  weight: 0.1
+  metric: geodesic
+  type: geodesic_ratio
+  geodesic_ratio:
+    n_neighbors: 10
+    target_ratio: 1.0
+    lambda_reg: 0.1
+  temperature: 0.1
