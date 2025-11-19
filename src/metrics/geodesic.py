@@ -4,6 +4,10 @@ import numpy as np
 import torch
 from sklearn.neighbors import NearestNeighbors
 from scipy.sparse.csgraph import shortest_path
+from scipy.sparse import csr_matrix
+import warnings
+
+warnings.filterwarnings('ignore')
 
 
 class GeodesicDistanceComputer:
@@ -54,22 +58,36 @@ class GeodesicDistanceComputer:
             # Если слишком мало точек, возвращаем евклидовы расстояния
             return self.compute_euclidean(X)
 
-        nbrs = NearestNeighbors(n_neighbors=k, metric='euclidean').fit(X)
+        nbrs = NearestNeighbors(n_neighbors=k, metric='euclidean', n_jobs=-1).fit(X)
         distances, indices = nbrs.kneighbors(X)
 
-        # Построение матрицы смежности графа
-        graph = np.full((n_samples, n_samples), np.inf)
+        # Построение РАЗРЕЖЕННОЙ матрицы смежности (экономит память!)
+        row = []
+        col = []
+        data = []
 
         for i in range(n_samples):
             for j, neighbor_idx in enumerate(indices[i]):
                 if neighbor_idx != i:
-                    graph[i, neighbor_idx] = distances[i, j]
-                    graph[neighbor_idx, i] = distances[i, j]
+                    row.append(i)
+                    col.append(neighbor_idx)
+                    data.append(distances[i, j])
 
-        # Вычисление кратчайших путей
-        geodesic_dist = shortest_path(graph, method='auto', directed=False)
+        graph_sparse = csr_matrix(
+            (data, (row, col)),
+            shape=(n_samples, n_samples)
+        )
 
-        # Обрезка бесконечных расстояний
+        geodesic_dist = shortest_path(
+            graph_sparse,
+            method='D',
+            directed=False,
+            return_predecessors=False
+        )
+
+        if hasattr(geodesic_dist, 'toarray'):
+            geodesic_dist = geodesic_dist.toarray()
+
         geodesic_dist[geodesic_dist == np.inf] = self.max_geodesic
 
         return geodesic_dist
@@ -131,26 +149,39 @@ class GeodesicMetric:
         if n_samples < self.computer.n_neighbors + 2:
             return self._empty_stats(n_samples)
 
-        ratios, mask = self.computer.compute_ratios(embeddings)
+        # ОПТИМИЗАЦИЯ: если много точек, используем подвыборку
+        if n_samples > 5000:
+            print(f"[WARNING] Large dataset ({n_samples} samples), using subsampling for geodesic metrics...")
+            # Берем подвыборку для быстрого вычисления
+            np.random.seed(42)
+            sample_idx = np.random.choice(n_samples, size=min(5000, n_samples), replace=False)
+            embeddings_sample = embeddings[sample_idx]
+        else:
+            embeddings_sample = embeddings
 
-        # Извлекаем только верхний треугольник (уникальные пары)
-        upper_triangle = np.triu_indices(n_samples, k=1)
-        valid_ratios = ratios[upper_triangle][mask[upper_triangle]]
+        try:
+            ratios, mask = self.computer.compute_ratios(embeddings_sample)
 
-        if len(valid_ratios) == 0:
+            upper_triangle = np.triu_indices(len(embeddings_sample), k=1)
+            valid_ratios = ratios[upper_triangle][mask[upper_triangle]]
+
+            if len(valid_ratios) == 0:
+                return self._empty_stats(n_samples)
+
+            return {
+                'mean': float(np.mean(valid_ratios)),
+                'std': float(np.std(valid_ratios)),
+                'min': float(np.min(valid_ratios)),
+                'max': float(np.max(valid_ratios)),
+                'median': float(np.median(valid_ratios)),
+                'q25': float(np.percentile(valid_ratios, 25)),
+                'q75': float(np.percentile(valid_ratios, 75)),
+                'num_samples': n_samples,
+                'num_valid_pairs': int(len(valid_ratios))
+            }
+        except Exception as e:
+            print(f"[WARNING] Error computing geodesic stats: {e}")
             return self._empty_stats(n_samples)
-
-        return {
-            'mean': float(np.mean(valid_ratios)),
-            'std': float(np.std(valid_ratios)),
-            'min': float(np.min(valid_ratios)),
-            'max': float(np.max(valid_ratios)),
-            'median': float(np.median(valid_ratios)),
-            'q25': float(np.percentile(valid_ratios, 25)),
-            'q75': float(np.percentile(valid_ratios, 75)),
-            'num_samples': n_samples,
-            'num_valid_pairs': int(len(valid_ratios))
-        }
 
     def compute_class_wise_stats(self, embeddings, labels):
         """
