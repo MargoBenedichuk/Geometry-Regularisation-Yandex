@@ -1,128 +1,127 @@
-import numpy as np
+# src/metrics/geometry.py
+
 import torch
-from sklearn.neighbors import NearestNeighbors
-from scipy.sparse.csgraph import shortest_path
+import numpy as np
+from sklearn.metrics import silhouette_score
+from sklearn.manifold import trustworthiness
 
 
-class GeodesicEuclideanRatioMetric:
+class LocalIntrinsicDimension:
+    """Вычисление локальной внутренней размерности."""
+
+    @staticmethod
+    def compute(embeddings, k=10):
+        """
+        Вычисляет локальную размерность для каждой точки.
+
+        Args:
+            embeddings: np.ndarray (n_samples, embedding_dim)
+            k: количество соседей
+
+        Returns:
+            np.ndarray: локальная размерность для каждой точки
+        """
+        if isinstance(embeddings, torch.Tensor):
+            embeddings = embeddings.cpu().numpy()
+
+        n_points = embeddings.shape[0]
+
+        if n_points < k + 2:
+            return np.ones(n_points)
+
+        from sklearn.neighbors import NearestNeighbors
+
+        nbrs = NearestNeighbors(n_neighbors=min(n_points, k + 2)).fit(embeddings)
+        dists_nn, _ = nbrs.kneighbors(embeddings)
+
+        local_dims = []
+
+        for i in range(n_points):
+            dists = dists_nn[i][1:k + 2]  # Исключаем саму точку
+
+            if len(dists) < 3 or np.any(dists < 1e-8):
+                local_dims.append(1.0)
+                continue
+
+            log_ratios = np.log(dists[:-1] / dists[-1])
+
+            if np.any(np.isnan(log_ratios)) or np.any(np.isinf(log_ratios)):
+                local_dims.append(1.0)
+                continue
+
+            d_hat = -1 / np.mean(log_ratios)
+            d_hat = np.clip(d_hat, 0.1, embeddings.shape[1] * 2.0)
+            local_dims.append(float(d_hat))
+
+        return np.array(local_dims)
+
+
+def compute_geometry_summary(embeddings, labels, k=10):
     """
-    Метрика отношения геодезического расстояния к евклидову расстоянию.
-    Используется для оценки нелинейности многообразия данных.
+    Вычисляет геометрическую статистику пространства представлений.
+    ТОЛЬКО локальная размерность, silhouette и trustworthiness.
+
+    Args:
+        embeddings: np.ndarray (n_samples, embedding_dim) или torch.Tensor
+        labels: np.ndarray (n_samples,) или torch.Tensor
+        k: количество соседей для локальной размерности
+
+    Returns:
+        dict: геометрическая статистика
     """
+    if isinstance(embeddings, torch.Tensor):
+        embeddings = embeddings.cpu().numpy()
+    if isinstance(labels, torch.Tensor):
+        labels = labels.cpu().numpy()
 
-    def __init__(self, n_neighbors=5):
-        """
-        Args:
-            n_neighbors: количество ближайших соседей для построения графа
-        """
-        self.n_neighbors = n_neighbors
+    summary = {}
 
-    def compute_euclidean_distances(self, X):
-        """
-        Вычисление попарных евклидовых расстояний.
-
-        Args:
-            X: np.ndarray или torch.Tensor, размер (n_samples, n_features)
-
-        Returns:
-            np.ndarray: матрица расстояний (n_samples, n_samples)
-        """
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-
-        diff = X[:, np.newaxis, :] - X[np.newaxis, :, :]
-        euclidean_dist = np.sqrt(np.sum(diff ** 2, axis=2))
-
-        return euclidean_dist
-
-    def compute_geodesic_distances(self, X):
-        """
-        Вычисление геодезических расстояний через граф k-ближайших соседей.
-
-        Args:
-            X: np.ndarray или torch.Tensor, размер (n_samples, n_features)
-
-        Returns:
-            np.ndarray: матрица геодезических расстояний (n_samples, n_samples)
-        """
-        if isinstance(X, torch.Tensor):
-            X = X.cpu().numpy()
-
-        n_samples = X.shape[0]
-
-        nbrs = NearestNeighbors(n_neighbors=self.n_neighbors + 1,
-                                algorithm='auto',
-                                metric='euclidean').fit(X)
-
-        distances, indices = nbrs.kneighbors(X)
-
-        graph = np.full((n_samples, n_samples), np.inf)
-
-        for i in range(n_samples):
-            for j, neighbor_idx in enumerate(indices[i]):
-                if neighbor_idx != i:
-                    graph[i, neighbor_idx] = distances[i, j]
-                    graph[neighbor_idx, i] = distances[i, j]
-
-        # Вычисление кратчайших путей (алгоритм Floyd-Warshall или Dijkstra)
-        ### Работает крайне долго
-        geodesic_dist = shortest_path(graph, method='auto', directed=False)
-        return geodesic_dist
-
-    def compute_ratio(self, X, sample_pairs=None):
-        """
-        Вычисление отношения геодезического расстояния к евклидову.
-
-        Args:
-            X: np.ndarray или torch.Tensor, размер (n_samples, n_features)
-            sample_pairs: list of tuples или None - пары индексов для вычисления,
-                         если None, вычисляет для всех пар
-
-        Returns:
-            float: среднее отношение geodesic/euclidean
-            dict: статистика (mean, std, min, max)
-        """
-        euclidean_dist = self.compute_euclidean_distances(X)
-        geodesic_dist = self.compute_geodesic_distances(X)
-
-        # Избегаем деления на ноль и бесконечных расстояний
-        mask = (euclidean_dist > 1e-10) & (geodesic_dist < np.inf)
-
-        if sample_pairs is None:
-            # Вычисляем для всех пар (исключая диагональ)
-            n = X.shape[0] if isinstance(X, np.ndarray) else X.shape[0]
-            mask = mask & (np.eye(n) == 0)
-
-            ratios = geodesic_dist[mask] / euclidean_dist[mask]
-        else:
-            # Вычисляем только для заданных пар
-            ratios = []
-            for i, j in sample_pairs:
-                if mask[i, j]:
-                    ratios.append(geodesic_dist[i, j] / euclidean_dist[i, j])
-            ratios = np.array(ratios)
-
-        stats = {
-            'mean': np.mean(ratios),
-            'std': np.std(ratios),
-            'min': np.min(ratios),
-            'max': np.max(ratios)
+    # === 1. Локальная размерность ===
+    try:
+        local_dims = LocalIntrinsicDimension.compute(embeddings, k=k)
+        summary['local_dimension'] = {
+            'mean': float(np.mean(local_dims)),
+            'std': float(np.std(local_dims)),
+            'min': float(np.min(local_dims)),
+            'max': float(np.max(local_dims)),
+            'median': float(np.median(local_dims))
+        }
+    except Exception as e:
+        print(f"Warning: Failed to compute local dimension: {e}")
+        summary['local_dimension'] = {
+            'mean': 1.0,
+            'std': 0.0,
+            'min': 1.0,
+            'max': 1.0,
+            'median': 1.0
         }
 
-        return stats['mean'], stats
+    # === 2. Silhouette Score (качество кластеризации) ===
+    if len(np.unique(labels)) > 1 and len(embeddings) > 1:
+        try:
+            silhouette = silhouette_score(embeddings, labels)
+            summary['silhouette_score'] = float(silhouette)
+        except Exception as e:
+            print(f"Warning: Failed to compute silhouette score: {e}")
+            summary['silhouette_score'] = 0.0
+    else:
+        summary['silhouette_score'] = 0.0
 
+    # === 3. Trustworthiness (сохранение локальной структуры) ===
+    try:
+        k_trust = min(k, len(embeddings) - 1)
+        if k_trust > 0:
+            trust = trustworthiness(embeddings, embeddings, n_neighbors=k_trust)
+            summary['trustworthiness'] = float(trust)
+        else:
+            summary['trustworthiness'] = 0.0
+    except Exception as e:
+        print(f"Warning: Failed to compute trustworthiness: {e}")
+        summary['trustworthiness'] = 0.0
 
-def example():
-    from sklearn.datasets import make_swiss_roll
+    # === 4. Общая информация ===
+    summary['num_samples'] = int(len(embeddings))
+    summary['embedding_dim'] = int(embeddings.shape[1])
+    summary['num_classes'] = int(len(np.unique(labels)))
 
-    X, _ = make_swiss_roll(n_samples=500, noise=0.1, random_state=42)
-
-    metric = GeodesicEuclideanRatioMetric(n_neighbors=10)
-    mean_ratio, stats = metric.compute_ratio(X)
-
-    print(f"Среднее отношение Geodesic/Euclidean: {mean_ratio:.4f}")
-    print(f"Статистика: {stats}")
-
-    X_torch = torch.tensor(X, dtype=torch.float32)
-    mean_ratio_torch, stats_torch = metric.compute_ratio(X_torch)
-    print(f"\nС PyTorch тензором: {mean_ratio_torch:.4f}")
+    return summary
