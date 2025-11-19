@@ -245,3 +245,173 @@ class GeodesicMetric:
             'num_samples': n_samples,
             'num_valid_pairs': 0
         }
+
+
+def compute_geodesic_summary(embeddings, labels, n_neighbors=10):
+    """
+    Вычисляет полную статистику геодезических расстояний.
+    Отдельная функция для анализа геодезических метрик.
+
+    Args:
+        embeddings: np.ndarray (n_samples, embedding_dim) или torch.Tensor
+        labels: np.ndarray (n_samples,) или torch.Tensor
+        n_neighbors: количество соседей для построения графа
+
+    Returns:
+        dict: полная статистика геодезических метрик
+    """
+    # Конвертация в numpy если нужно
+    if isinstance(embeddings, torch.Tensor):
+        embeddings = embeddings.cpu().numpy()
+    if isinstance(labels, torch.Tensor):
+        labels = labels.cpu().numpy()
+
+    summary = {}
+
+    try:
+        # Создаем метрику
+        geo_metric = GeodesicMetric(n_neighbors=n_neighbors)
+
+        # === 1. Глобальная статистика ===
+        geo_global = geo_metric.compute_global_stats(embeddings)
+        summary['global'] = geo_global
+
+        # === 2. Поклассовая статистика ===
+        geo_class = geo_metric.compute_class_wise_stats(embeddings, labels)
+        summary['class_wise'] = geo_class
+
+        # === 3. Межклассовая статистика ===
+        geo_inter = geo_metric.compute_inter_class_stats(embeddings, labels)
+        summary['inter_class'] = geo_inter
+
+        # === 4. Дополнительная аналитика ===
+        summary['analysis'] = _compute_additional_analysis(
+            geo_global, geo_class, geo_inter
+        )
+
+    except Exception as e:
+        print(f"Warning: Failed to compute geodesic metrics: {e}")
+        summary = _get_empty_summary(len(embeddings), len(np.unique(labels)))
+
+    return summary
+
+
+def _compute_additional_analysis(global_stats, class_stats, inter_stats):
+    """
+    Вычисляет дополнительные аналитические метрики.
+
+    Args:
+        global_stats: dict - глобальная статистика
+        class_stats: dict - поклассовая статистика
+        inter_stats: dict - межклассовая статистика
+
+    Returns:
+        dict: дополнительная аналитика
+    """
+    analysis = {}
+
+    # === Анализ отклонения от плоскости ===
+    global_mean = global_stats.get('mean', 1.0)
+    analysis['flatness_score'] = float(1.0 / max(global_mean, 0.1))
+    # Чем ближе к 1.0, тем более "плоское" пространство
+
+    # === Анализ однородности между классами ===
+    if class_stats:
+        class_means = [
+            stats.get('mean', 1.0)
+            for stats in class_stats.values()
+            if stats.get('num_valid_pairs', 0) > 0
+        ]
+        if class_means:
+            analysis['class_uniformity'] = {
+                'mean': float(np.mean(class_means)),
+                'std': float(np.std(class_means)),
+                'coefficient_of_variation': float(np.std(class_means) / (np.mean(class_means) + 1e-8))
+            }
+        else:
+            analysis['class_uniformity'] = {'mean': 1.0, 'std': 0.0, 'coefficient_of_variation': 0.0}
+
+    # === Анализ разделимости классов ===
+    intra_class_mean = global_stats.get('mean', 1.0)
+    inter_class_mean = inter_stats.get('mean', 1.0)
+
+    if intra_class_mean > 0:
+        analysis['class_separability_ratio'] = float(inter_class_mean / intra_class_mean)
+        # > 1.0 означает, что между классами расстояния больше, чем внутри (хорошо)
+    else:
+        analysis['class_separability_ratio'] = 1.0
+
+    # === Общая оценка качества ===
+    # Комбинированная метрика: насколько хорошо организовано пространство
+    quality_score = (
+            analysis['flatness_score'] * 0.3 +  # 30% - плоскость
+            (1.0 - min(analysis.get('class_uniformity', {}).get('coefficient_of_variation', 0.5),
+                       1.0)) * 0.3 +  # 30% - однородность
+            min(analysis['class_separability_ratio'] / 2.0, 1.0) * 0.4  # 40% - разделимость
+    )
+    analysis['overall_quality_score'] = float(quality_score)
+
+    return analysis
+
+
+def _get_empty_summary(n_samples, n_classes):
+    """
+    Возвращает пустую статистику при ошибке.
+
+    Args:
+        n_samples: количество образцов
+        n_classes: количество классов
+
+    Returns:
+        dict: пустая статистика
+    """
+    return {
+        'global': {
+            'mean': 1.0,
+            'std': 0.0,
+            'min': 1.0,
+            'max': 1.0,
+            'median': 1.0,
+            'q25': 1.0,
+            'q75': 1.0,
+            'num_samples': n_samples,
+            'num_valid_pairs': 0
+        },
+        'class_wise': {},
+        'inter_class': {
+            'mean': 1.0,
+            'std': 0.0,
+            'min': 1.0,
+            'max': 1.0,
+            'num_pairs': 0
+        },
+        'analysis': {
+            'flatness_score': 1.0,
+            'class_uniformity': {'mean': 1.0, 'std': 0.0, 'coefficient_of_variation': 0.0},
+            'class_separability_ratio': 1.0,
+            'overall_quality_score': 0.5
+        }
+    }
+
+
+def compute_geodesic_summary_with_config(embeddings, labels, cfg):
+    """
+    Вычисляет геодезическую статистику с параметрами из конфига.
+
+    Args:
+        embeddings: np.ndarray (n_samples, embedding_dim)
+        labels: np.ndarray (n_samples,)
+        cfg: OmegaConf config с параметрами
+
+    Returns:
+        dict: полная геодезическая статистика
+    """
+    # Извлекаем n_neighbors из конфига
+    n_neighbors = 10  # Значение по умолчанию
+
+    if hasattr(cfg, 'regularization'):
+        reg_cfg = cfg.regularization
+        if hasattr(reg_cfg, 'geodesic_ratio'):
+            n_neighbors = reg_cfg.geodesic_ratio.get('n_neighbors', 10)
+
+    return compute_geodesic_summary(embeddings, labels, n_neighbors=n_neighbors)
