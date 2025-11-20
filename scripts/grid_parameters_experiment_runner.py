@@ -19,7 +19,7 @@ os.makedirs(CONFIG_DIR, exist_ok=True)
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 # === Параметры перебора ===
-DATASETS = ["mnist", "cifar10", "imagenet"]
+DATASETS = ["imagenet"]
 MODELS = [ "resnet50", "resnet101"]
 SEEDS = [42, 2025]
 LOSSES = ["none", "geodesic", "geometry", "combined"]  # "combined" = geodesic + geometry

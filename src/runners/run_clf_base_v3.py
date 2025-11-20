@@ -54,6 +54,14 @@ def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
     cfg = load_config(cfg_path)
     OmegaConf.save(cfg, os.path.join(exp_dir, "config_used.yaml"))
     
+    print("\n" + "=" * 80)
+    print(f" Dataset: {cfg.dataset.base}")
+    print(f" Model: {cfg.model.name}")
+    print(f" Input shape: {tuple(cfg.model.input_shape)}")
+    print(f" Num classes: {cfg.model.num_classes}")
+    print(f" Regularization: {cfg.regularization.metric} ",  f"(weight={cfg.regularization.weight})")
+    print("=" * 80 + "\n")
+
     exp_name = experiment_name or cfg.experiment_name
     mlflow.set_experiment(exp_name)
     
