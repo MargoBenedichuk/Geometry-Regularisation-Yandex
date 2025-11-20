@@ -1,0 +1,23 @@
+dataset:
+  base: src.utils.registry.get_imagenet
+  root: ./data
+  transform: src.utils.registry.default_mnist_transform
+  val_ratio: 0.2
+device: cuda
+experiment_name: clf_imagenet_resnet101_2025
+model:
+  hidden_dim: 128
+  input_shape:
+  - 3
+  - 32
+  - 32
+  name: resnet101
+  num_classes: 10
+regularization:
+  metric: info_nce
+  weight: 0.0
+seed: 2025
+train:
+  batch_size: 64
+  epochs: 10
+  lr: 0.001

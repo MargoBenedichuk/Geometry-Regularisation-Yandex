@@ -1,9 +1,12 @@
 ./.ipynb_checkpoints
 
 ./yandex_studcamp_project.egg-info
-
+mlruns/
+experiments_result/
+venv/
 src/utils/__pycache__/
 yandex_studcamp_project.egg-info/
 .ipynb_checkpoints/
 src/metrics/__pycache__/
+src/metrics/.ipynb_checkpoints/
 src/yandex_studcamp_project.egg-info/
