@@ -82,6 +82,4 @@ def compute_geometric_loss(
     if metric in {"compactness", "local_dim"}:
         return _class_compactness(embeddings, labels)
 
-    # Default: return zero loss if metric is unknown
-    print(f"[WARNING] Unknown regularization metric: {metric}, returning zero loss")
     return torch.zeros(1, device=embeddings.device, dtype=embeddings.dtype)
