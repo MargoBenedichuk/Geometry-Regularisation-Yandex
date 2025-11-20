@@ -72,15 +72,11 @@ def build_model(cfg):
     # RESNET BACKBONES
     # ---------------------------
     if name in ["resnet50", "resnet101"]:
-
-        # 1) Создаём backbone
-        backbone = ResNetBackbone(
-            variant=name,
-            hidden_dim=hidden_dim,
-            num_classes=num_classes
-        )
-
-        return backbone
+        model = torchvision.models.__dict__[model_name](weights=none)
+        # заменить классификатор
+        in_features = model.fc.in_features
+        model.fc = nn.Linear(in_features, cfg.model.num_classes)
+        return model
 
     # ---------------------------
     raise ValueError(f"Unknown model type: {name}")

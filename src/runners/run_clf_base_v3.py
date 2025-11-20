@@ -73,10 +73,7 @@ def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
         if dataset_factory is None:
             raise ValueError("cfg.dataset.base must point to a dataset constructor")
         
-        ddataset_kwargs = dict(root=cfg.dataset.root, train=True)
-
-        if "imagenet" not in cfg.dataset.base.lower():
-            dataset_kwargs["download"] = True
+        dataset_kwargs = dict(root=cfg.dataset.root, train=True)
 
         try:
             base_ds = dataset_factory(**dataset_kwargs)
@@ -88,7 +85,11 @@ def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
         transform_resolver = resolve_target(getattr(cfg.dataset, "transform", None))
         transform = (transform_resolver() if transform_resolver else default_mnist_transform())
         
-        dataset = ClassificationDataset(base_ds, transform=transform)
+        if "ImageNet" in str(type(base_ds)):
+            dataset = base_ds
+        else:
+            dataset = ClassificationDataset(base_ds, transform=transform)
+
         train_ds, val_ds = make_classification_splits(dataset, val_ratio=cfg.dataset.val_ratio, seed=cfg.seed)
         
         balanced_cfg = getattr(cfg.dataset, "balanced_dataset", None)
@@ -128,57 +129,73 @@ def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
         # === 4. Training Loop ===
         print("[INFO] Starting training...")
         progress = tqdm(range(cfg.train.epochs), desc=f"Epoch: ", leave=False)
-        for epoch in  progress:
+        print("[INFO] Starting training...")
+
+        for epoch in range(cfg.train.epochs):
             model.train()
             running_loss = 0.0
             running_ce = 0.0
             running_geod = 0.0
             steps = 0
-            
+
             if train_balanced and hasattr(train_ds, "reshuffle"):
                 train_ds.reshuffle()
-            # progress = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{cfg.train.epochs}", leave=False)
-            for xb, yb in train_loader:
-                # print(f"Epoch {epoch + 1}/{cfg.train.epochs} - Batch Step")
+
+            # ОДИН корректный tqdm по батчам
+            progress = tqdm(
+                train_loader,
+                desc=f"Epoch {epoch+1}/{cfg.train.epochs}",
+                dynamic_ncols=True,     # адаптивная ширина
+                leave=True,             # ТОЛЬКО один прогресс-бар
+                smoothing=0.1
+            )
+
+            for xb, yb in progress:
                 xb, yb = xb.to(device), yb.to(device)
                 logits, latents = model(xb, return_features=True)
-                
-                # CE loss
+
+                # CE
                 loss_ce = torch.nn.functional.cross_entropy(logits, yb)
-                
-                # GEODESIC loss используя диспетчер
+
+                # Geodesic / geometry
                 loss_geod = compute_geodesic_loss(latents, labels=yb, cfg=cfg.regularization)
-                
-                # Total loss
+
                 loss = loss_ce + cfg.regularization.weight * loss_geod
-                
+
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-                
+
                 steps += 1
                 running_loss += loss.item()
                 running_ce += loss_ce.item()
                 running_geod += loss_geod.item()
-                
-                progress.set_postfix(
-                    loss=f"{running_loss / steps:.4f}",
-                    ce=f"{loss_ce.item():.3f}",
-                    geod=f"{loss_geod.item():.3f}",
-                )
-            
-            epoch_loss = running_loss / max(steps, 1)
-            epoch_ce = running_ce / max(steps, 1)
-            epoch_geod = running_geod / max(steps, 1)
-            
+
+                # обновляем вывод tqdm
+                progress.set_postfix({
+                    "loss": f"{running_loss/steps:.4f}",
+                    "ce":   f"{running_ce/steps:.4f}",
+                    "geod": f"{running_geod/steps:.4f}",
+                })
+
+            # — конец эпохи —
+            epoch_loss = running_loss / steps
+            epoch_ce = running_ce / steps
+            epoch_geod = running_geod / steps
+
             metrics_history["train_loss"].append(epoch_loss)
             metrics_history["train_ce_loss"].append(epoch_ce)
             metrics_history["train_geodesic_loss"].append(epoch_geod)
-            
+
             mlflow.log_metric("train/loss", epoch_loss, step=epoch)
             mlflow.log_metric("train/ce_loss", epoch_ce, step=epoch)
             mlflow.log_metric("train/geodesic_loss", epoch_geod, step=epoch)
-            
+
+            print(
+                f"Epoch {epoch+1}/{cfg.train.epochs} | "
+                f"Loss={epoch_loss:.4f} CE={epoch_ce:.4f} Geod={epoch_geod:.4f}"
+            )
+
             # === 5. Validation ===
             model.eval()
             all_logits_val, all_targets_val = [], []
