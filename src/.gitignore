@@ -1,9 +1,0 @@
-
-__pycache__/
-*.py[cod]
-*.class
-data/
-venv/
-mlruns/
-experiments_result/
-configs/
