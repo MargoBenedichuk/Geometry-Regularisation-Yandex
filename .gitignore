@@ -6,4 +6,3 @@ data/
 venv/
 mlruns/
 experiments_result/
-configs/

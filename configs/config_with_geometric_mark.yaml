@@ -1,0 +1,36 @@
+experiment_name: geodesic_vs_local_dimension_vs_baseline
+
+# === Dataset ===
+dataset:
+  base: torchvision.datasets.MNIST
+  root: ./data
+  val_ratio: 0.2
+  transform: null
+  balanced_dataset:
+    n_classes: 10
+    n_samples: 50
+    seed: 42
+
+# === Model ===
+model:
+  input_shape: [1, 28, 28]
+  hidden_dim: 64
+  num_classes: 10
+
+# === Training ===
+train:
+  epochs: 20
+  batch_size: 500
+  lr: 0.001
+
+# === Regularization with LOCAL DIMENSION ===
+regularization:
+  metric: "geometric_mark"           # ← LOCAL DIMENSION регуляризатор
+  weight: 0.1                          # ← Вес регуляризации
+  n_neighbors: 10                      # ← Соседей для оценки размерности
+  target_dimension: 4.0                # ← Целевая локальная размерность (для MNIST)
+  target_uniformity: 0.5               # ← Целевая однородность
+
+# === Other ===
+device: cpu
+seed: 42
