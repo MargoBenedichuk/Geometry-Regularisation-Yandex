@@ -76,7 +76,7 @@ def run_experiment(entry):
     out_dir = RESULTS_DIR / f"{sig['dataset']}/{sig['model']}/seed_{sig['seed']}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    cmd = ["python", "-m", "src.runners.run_clf_base_v2", cfg_path, str(out_dir)]
+    cmd = ["python", "-m", "src.runners.run_clf_base_v3", cfg_path, str(out_dir)]
     try:
         subprocess.run(cmd, check=True)
         status = "done"
