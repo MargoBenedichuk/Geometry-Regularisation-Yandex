@@ -12,6 +12,7 @@ from tqdm.auto import tqdm
 from omegaconf import OmegaConf
 from collections import defaultdict
 
+from sklearn.metrics import classification_report
 from src.utils.config import load_config
 from src.dataset.datasets import BalancedClassificationDataset, ClassificationDataset
 from src.dataset.dataloader import make_dataloader
@@ -23,6 +24,22 @@ from src.utils.registry import default_mnist_transform, resolve_target
 from src.vizualisation.vizualisator import save_interactive_projection, save_umap_projection
 from src.metrics.geodesic import compute_geodesic_summary
 from src.metrics.geometry import compute_geometry_summary
+import matplotlib.pyplot as plt
+
+
+def plot_metric(metric_name, history, save_path):
+    plt.figure()
+    plt.plot(history[metric_name], label='Train')
+    val_key = f"val_{metric_name}" if f"val_{metric_name}" in history else None
+    if val_key:
+        plt.plot(history[val_key], label='Validation')
+    plt.title(f'{metric_name.capitalize()} over epochs')
+    plt.xlabel('Epoch')
+    plt.ylabel(metric_name.capitalize())
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.savefig(save_path)
+    plt.close()
 
 
 def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
@@ -280,6 +297,26 @@ def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
         mlflow.log_artifact(npz_path)
         
         print(f"[INFO] Experiment completed. Results saved to {exp_dir}")
+
+
+        # === 12. Save Train/Val Curves ===
+        plot_metric("loss", metrics_history, os.path.join(exp_dir, "train_val_loss.png"))
+        plot_metric("accuracy", metrics_history, os.path.join(exp_dir, "train_val_accuracy.png"))
+
+
+        # === 13. Classification Report ===
+        report_dict = classification_report(
+            targets.numpy(), logits.argmax(1).numpy(),
+            output_dict=True, digits=4
+        )
+        report_path = os.path.join(exp_dir, "classification_report.json")
+        with open(report_path, "w") as f:
+            json.dump(report_dict, f, indent=2)
+
+        # log classification report as artifact
+        mlflow.log_artifact(report_path)
+
+
         
         return {
             "metrics": metrics,

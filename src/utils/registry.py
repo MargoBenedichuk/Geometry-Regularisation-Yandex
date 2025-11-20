@@ -37,6 +37,8 @@ def default_mnist_transform():
         transforms.Normalize((0.1307,), (0.3081,)),
     ])
 
+
+
 def resolve_target(target_like: Union[str, Callable, Dict[str, Any], DictConfig, None]) -> Optional[Callable]:
     """Convert a string/DictConfig reference to a callable.
 
