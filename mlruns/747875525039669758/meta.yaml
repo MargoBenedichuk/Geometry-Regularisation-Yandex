@@ -1,6 +1,0 @@
-artifact_location: file:///home/rita/Geometry-Regularisation-Yandex/mlruns/747875525039669758
-creation_time: 1763624278696
-experiment_id: '747875525039669758'
-last_update_time: 1763624278696
-lifecycle_stage: active
-name: mnist_contrastive
