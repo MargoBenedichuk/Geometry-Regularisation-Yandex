@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from src.runner.run_clf_base_v2 import run_experiment
 
 
-def create_comparison_report(results_with_geodesic, results_baseline, output_dir):
+def create_comparison_report(results_with_custom, results_baseline, output_dir):
     """
     Create comparison report between two experiments.
     """
@@ -38,22 +38,22 @@ def create_comparison_report(results_with_geodesic, results_baseline, output_dir
     }
     
     # === Classification Metrics Comparison ===
-    with_geo_metrics = results_with_geodesic["metrics"]
+    with_custom_metrics = results_with_custom["metrics"]
     baseline_metrics = results_baseline["metrics"]
     
     comparison_data = []
-    metric_keys = set(with_geo_metrics.keys()) | set(baseline_metrics.keys())
+    metric_keys = set(with_custom_metrics.keys()) | set(baseline_metrics.keys())
     
     for metric in sorted(metric_keys):
-        with_geo_val = with_geo_metrics.get(metric, "N/A")
+        with_custom_val = with_custom_metrics.get(metric, "N/A")
         baseline_val = baseline_metrics.get(metric, "N/A")
         
-        if isinstance(with_geo_val, (int, float)) and isinstance(baseline_val, (int, float)):
-            diff = with_geo_val - baseline_val
+        if isinstance(with_custom_val, (int, float)) and isinstance(baseline_val, (int, float)):
+            diff = with_custom_val - baseline_val
             diff_pct = (diff / baseline_val * 100) if baseline_val != 0 else 0
             comparison_data.append({
                 "Metric": metric,
-                "With Geodesic": f"{with_geo_val:.4f}",
+                f"With {regularization}": f"{with_custom_val:.4f}",
                 "Baseline (CE)": f"{baseline_val:.4f}",
                 "Difference": f"{diff:+.4f}",
                 "% Change": f"{diff_pct:+.2f}%"
@@ -61,7 +61,7 @@ def create_comparison_report(results_with_geodesic, results_baseline, output_dir
         else:
             comparison_data.append({
                 "Metric": metric,
-                "With Geodesic": str(with_geo_val),
+                f"With {regularization}": str(with_custom_val),
                 "Baseline (CE)": str(baseline_val),
                 "Difference": "N/A",
                 "% Change": "N/A"
@@ -70,7 +70,7 @@ def create_comparison_report(results_with_geodesic, results_baseline, output_dir
     report["comparison"]["classification_metrics"] = comparison_data
     
     # === Geometric Metrics Comparison ===
-    geo_with = results_with_geodesic.get("geometry", {})
+    geo_with = results_with_custom.get("geometry", {})
     geo_base = results_baseline.get("geometry", {})
     
     geo_comparison = []
@@ -94,7 +94,7 @@ def create_comparison_report(results_with_geodesic, results_baseline, output_dir
     report["comparison"]["geometric_metrics"] = geo_comparison
     
     # === Geodesic Metrics Comparison ===
-    geo_reg_with = results_with_geodesic.get("geodesic", {})
+    geo_reg_with = results_with_custom.get("geodesic", {})
     geo_reg_base = results_baseline.get("geodesic", {})
     
     geo_reg_comparison = []
@@ -140,7 +140,7 @@ def create_comparison_report(results_with_geodesic, results_baseline, output_dir
     report["comparison"]["geodesic_metrics"] = geo_reg_comparison
     
     # === Training Dynamics Analysis ===
-    history_with = results_with_geodesic.get("history", {})
+    history_with = results_with_custom.get("history", {})
     history_base = results_baseline.get("history", {})
     
     analysis = {
@@ -182,13 +182,13 @@ def create_comparison_report(results_with_geodesic, results_baseline, output_dir
     return report, comparison_data, geo_comparison, geo_reg_comparison, analysis
 
 
-def plot_training_curves(results_with_geodesic, results_baseline, output_dir):
+def plot_training_curves(results_with_custom, results_baseline, output_dir):
     """
     Plot training curves comparison.
     """
     os.makedirs(output_dir, exist_ok=True)
     
-    history_with = results_with_geodesic.get("history", {})
+    history_with = results_with_custom.get("history", {})
     history_base = results_baseline.get("history", {})
     
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
@@ -243,28 +243,30 @@ def plot_training_curves(results_with_geodesic, results_baseline, output_dir):
     plt.close()
 
 
+regularization = "geometric_mark" ### "geodesic"
+
 def main():
     """
     Main experiment runner.
     """
     print("=" * 80)
-    print("GEODESIC REGULARIZER vs BASELINE (CE only) EXPERIMENT")
+    print(f"{regularization.upper()} REGULARIZER vs BASELINE (CE only) EXPERIMENT")
     print("=" * 80)
     
     # Create experiment directories
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    experiments_dir = f"experiments_{timestamp}"
+    experiments_dir = f"exps/experiments_{timestamp}"
     
-    exp_with_geo_dir = os.path.join(experiments_dir, "with_geodesic")
+    exp_with_custom_dir = os.path.join(experiments_dir, f"with_{regularization}")
     exp_baseline_dir = os.path.join(experiments_dir, "baseline_ce")
     comparison_dir = os.path.join(experiments_dir, "comparison")
     
     # Get config paths
-    config_with_geo = "configs/config_with_geodesic.yaml"
+    config_with_custom = f"configs/config_with_{regularization}.yaml"
     config_baseline = "configs/config_without_regularization.yaml"
     
-    if not os.path.exists(config_with_geo):
-        print(f"[ERROR] Config file not found: {config_with_geo}")
+    if not os.path.exists(config_with_custom):
+        print(f"[ERROR] Config file not found: {config_with_custom}")
         sys.exit(1)
     
     if not os.path.exists(config_baseline):
@@ -272,10 +274,10 @@ def main():
         sys.exit(1)
     
     # Run experiments
-    print(f"\n[1/3] Running experiment WITH geodesic regularizer...")
-    print(f"      Config: {config_with_geo}")
-    print(f"      Output: {exp_with_geo_dir}")
-    results_with_geo = run_experiment(config_with_geo, exp_with_geo_dir)
+    print(f"\n[1/3] Running experiment WITH {regularization} regularizer...")
+    print(f"      Config: {config_with_custom}")
+    print(f"      Output: {exp_with_custom_dir}")
+    results_with_custom = run_experiment(config_with_custom, exp_with_custom_dir)
     
     print(f"\n[2/3] Running baseline experiment (CE only)...")
     print(f"      Config: {config_baseline}")
@@ -285,7 +287,7 @@ def main():
     # Compare results
     print(f"\n[3/3] Creating comparison report...")
     report, comp_metrics, comp_geom, comp_geod, analysis = create_comparison_report(
-        results_with_geo, results_baseline, comparison_dir
+        results_with_custom, results_baseline, comparison_dir
     )
     
     # Print tables
@@ -321,14 +323,14 @@ def main():
             print(f"{key}: {value}")
     
     # Plot training curves
-    plot_training_curves(results_with_geo, results_baseline, comparison_dir)
+    plot_training_curves(results_with_custom, results_baseline, comparison_dir)
     
     # Summary
     print("\n" + "=" * 80)
     print("EXPERIMENT COMPLETED")
     print("=" * 80)
     print(f"All results saved to: {experiments_dir}")
-    print(f"  - With Geodesic: {exp_with_geo_dir}")
+    print(f"  - With {regularization}: {exp_with_custom_dir}")
     print(f"  - Baseline (CE): {exp_baseline_dir}")
     print(f"  - Comparison:    {comparison_dir}")
     print("=" * 80)

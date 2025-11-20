@@ -12,6 +12,7 @@ from tqdm.auto import tqdm
 from omegaconf import OmegaConf
 from collections import defaultdict
 
+from src.regularization.geometry_mark_loss import compute_geometric_loss
 from src.utils.config import load_config
 from src.dataset.datasets import BalancedClassificationDataset, ClassificationDataset
 from src.dataset.dataloader import make_dataloader
@@ -22,7 +23,7 @@ from src.regularization.geodesic_loss import compute_geodesic_loss
 from src.utils.registry import default_mnist_transform, resolve_target
 from src.vizualisation.vizualisator import save_interactive_projection, save_umap_projection
 from src.metrics.geodesic import compute_geodesic_summary
-from src.metrics.geometry import compute_geometry_summary
+from src.metrics.geometry_mark import compute_geometry_summary
 
 
 def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
@@ -114,6 +115,7 @@ def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
             running_loss = 0.0
             running_ce = 0.0
             running_geod = 0.0
+            running_geom = 0.0
             steps = 0
             
             if train_balanced and hasattr(train_ds, "reshuffle"):
@@ -129,9 +131,10 @@ def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
                 
                 # GEODESIC loss используя диспетчер
                 loss_geod = compute_geodesic_loss(latents, labels=yb, cfg=cfg.regularization)
-                
+                loss_geom = compute_geometric_loss(latents, labels=yb, cfg=cfg.regularization)
+
                 # Total loss
-                loss = loss_ce + cfg.regularization.weight * loss_geod
+                loss = loss_ce + cfg.regularization.weight * loss_geod + cfg.regularization.weight * loss_geom
                 
                 optimizer.zero_grad()
                 loss.backward()
@@ -141,11 +144,13 @@ def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
                 running_loss += loss.item()
                 running_ce += loss_ce.item()
                 running_geod += loss_geod.item()
-                
+                running_geom += loss_geom.item()
+
                 progress.set_postfix(
                     loss=f"{running_loss / steps:.4f}",
                     ce=f"{loss_ce.item():.3f}",
                     geod=f"{loss_geod.item():.3f}",
+                    geom=f"{loss_geom.item():.3f}",
                 )
             
             epoch_loss = running_loss / max(steps, 1)
@@ -176,7 +181,8 @@ def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
                     # Compute validation loss
                     loss_ce = torch.nn.functional.cross_entropy(logits, yb)
                     loss_geod = compute_geodesic_loss(latents, labels=yb, cfg=cfg.regularization)
-                    val_loss = loss_ce + cfg.regularization.weight * loss_geod
+                    loss_geom = compute_geometric_loss(latents, labels=yb, cfg=cfg.regularization)
+                    val_loss = loss_ce + cfg.regularization.weight * loss_geod + cfg.regularization.weight * loss_geom
                     val_loss_total += val_loss.item()
                     val_steps += 1
             
@@ -198,7 +204,7 @@ def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
         print("[INFO] Computing final metrics...")
         model.eval()
         all_logits, all_targets, all_latents = [], [], []
-        
+
         with torch.no_grad():
             for xb, yb in val_loader:
                 xb = xb.to(device)
