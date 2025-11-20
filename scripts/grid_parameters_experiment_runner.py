@@ -5,6 +5,7 @@ import yaml
 import subprocess
 from datetime import datetime
 from itertools import product
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from filelock import FileLock
 
@@ -19,19 +20,16 @@ os.makedirs(CONFIG_DIR, exist_ok=True)
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 # === Параметры перебора ===
-DATASETS = ["imagenet"]
-MODELS = [ "resnet50", "resnet101"]
+DATASETS = ["mnist", "cifar10", "imagenet"]  
+MODELS = ["simple_cnn", "resnet50", "resnet101"]
 SEEDS = [42, 2025]
-LOSSES = ["none", "geodesic", "geometry", "combined"]  # "combined" = geodesic + geometry
-
 
 # === Генерация сигнатуры ===
-def make_signature(dataset, model, seed, loss):
+def make_signature(dataset, model, seed):
     return {
         "dataset": dataset,
         "model": model,
         "seed": seed,
-        "loss": loss
     }
 
 def hash_signature(sig):
@@ -40,47 +38,19 @@ def hash_signature(sig):
 
 # === Генерация конфига ===
 def generate_config(sig, hash_id):
-    reg_cfg = {
-        "weight": 0.1 if sig["loss"] != "none" else 0.0,
-        "metric": sig["loss"]
-    }
-    if sig["loss"] in ["geodesic", "combined"]:
-        reg_cfg["geodesic_ratio"] = {
-            "n_neighbors": 10,
-            "target_ratio": 1.0,
-            "lambda_reg": 0.1
-        }
-    if sig["loss"] in ["geometry", "combined"]:
-        reg_cfg["geometry_mark"] = {
-            "margin": 0.1,
-            "lambda_reg": 0.1
-        }
-
-    if sig["dataset"] == "imagenet":
-        transform = None  # assume handled inside model or dataset wrapper
-        input_shape = [3, 224, 224]
-        num_classes = 1000
-    elif sig["dataset"] == "cifar10":
-        transform = "src.utils.registry.default_mnist_transform"
-        input_shape = [3, 32, 32]
-        num_classes = 10
-    else:  # mnist
-        transform = "src.utils.registry.default_mnist_transform"
-        input_shape = [1, 28, 28]
-        num_classes = 10
-
     cfg = {
-        "experiment_name": f"clf_{sig['dataset']}_{sig['model']}_{sig['loss']}_{sig['seed']}",
+        "experiment_name": f"clf_{sig['dataset']}_{sig['model']}_{sig['seed']}",
         "dataset": {
             "base": f"src.utils.registry.get_{sig['dataset']}",
             "root": "./data",
             "val_ratio": 0.2,
+            "transform": "src.utils.registry.default_mnist_transform"
         },
         "model": {
             "name": sig["model"],
-            "input_shape": input_shape,
+            "input_shape": [1, 28, 28] if sig["dataset"] == "mnist" else [3, 32, 32],
             "hidden_dim": 128,
-            "num_classes": num_classes
+            "num_classes": 10
         },
         "train": {
             "epochs": 10,
@@ -89,17 +59,15 @@ def generate_config(sig, hash_id):
         },
         "device": "cuda",
         "seed": sig["seed"],
-        "regularization": reg_cfg
+        "regularization": {
+            "weight": 0.0,
+            "metric": "info_nce"
+        }
     }
-
-    if transform:
-        cfg["dataset"]["transform"] = transform
-
     cfg_path = CONFIG_DIR / f"{hash_id}.yaml"
     with open(cfg_path, "w") as f:
         yaml.safe_dump(cfg, f)
     return str(cfg_path)
-
 
 # === Запуск эксперимента ===
 def run_experiment(entry):
@@ -108,7 +76,7 @@ def run_experiment(entry):
     out_dir = RESULTS_DIR / f"{sig['dataset']}/{sig['model']}/seed_{sig['seed']}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    cmd = ["python", "-m", "src.runners.run_clf_base_v3", cfg_path, str(out_dir)]
+    cmd = ["python", "-m", "src.runners.run_clf_base_v2", cfg_path, str(out_dir)]
     try:
         subprocess.run(cmd, check=True)
         status = "done"
@@ -125,21 +93,11 @@ def run_experiment(entry):
 
     print(f"[STATUS] {sig['dataset']}/{sig['model']}/seed_{sig['seed']} → {status}")
 
-def is_valid_combo(dataset, model):
-    if model == "simple_cnn":
-        return dataset in ["mnist", "cifar10"]
-    if model.startswith("resnet"):
-        return dataset == "imagenet"
-    return True
-
-
 # === Основная функция ===
 def main():
     all_signatures = []
-    for ds, mdl, seed, loss in product(DATASETS, MODELS, SEEDS, LOSSES):
-        if not is_valid_combo(ds, mdl):
-            continue
-        sig = make_signature(ds, mdl, seed, loss)
+    for ds, mdl, seed in product(DATASETS, MODELS, SEEDS):
+        sig = make_signature(ds, mdl, seed)
         h = hash_signature(sig)
         all_signatures.append({"signature": sig, "hash": h, "status": "pending"})
 
@@ -159,12 +117,11 @@ def main():
     with open(REGISTRY_PATH) as f:
         entries = [r for r in json.load(f) if r["status"] != "done"]
 
-    
-
     print(f"[INFO] Запуск {len(entries)} экспериментов...")
-    for entry in entries:
-        run_experiment(entry)
-
+    with ProcessPoolExecutor(max_workers=min(4, os.cpu_count() or 2)) as pool:
+        futures = [pool.submit(run_experiment, entry) for entry in entries]
+        for fut in as_completed(futures):
+            fut.result()
 
 if __name__ == "__main__":
     main()
