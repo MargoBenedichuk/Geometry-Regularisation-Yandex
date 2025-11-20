@@ -1,6 +1,7 @@
 import torch.nn as nn
 from typing import Literal
 
+from src.models.cnns import SimpleCNN, ResNetBackbone
 
 def get_head(
     type: Literal["linear", "mlp", "projection"],
@@ -38,3 +39,48 @@ def get_head(
 
     else:
         raise ValueError(f"Unsupported head type: {type}")
+
+
+
+def build_model(cfg):
+    """
+    Универсальный конструктор моделей:
+    - simple_cnn
+    - resnet50
+    - resnet101
+
+    Возвращает модель с методом:
+        forward(x, return_features=True) → (logits, z)
+    """
+
+    name = cfg.model.name.lower()
+    num_classes = cfg.model.num_classes
+    hidden_dim = cfg.model.hidden_dim
+    input_shape = tuple(cfg.model.input_shape)
+
+    # ---------------------------
+    # SIMPLE CNN
+    # ---------------------------
+    if name == "simple_cnn":
+        return SimpleCNN(
+            input_shape=input_shape,
+            hidden_dim=hidden_dim,
+            num_classes=num_classes
+        )
+
+    # ---------------------------
+    # RESNET BACKBONES
+    # ---------------------------
+    if name in ["resnet50", "resnet101"]:
+
+        # 1) Создаём backbone
+        backbone = ResNetBackbone(
+            variant=name,
+            hidden_dim=hidden_dim,
+            num_classes=num_classes
+        )
+
+        return backbone
+
+    # ---------------------------
+    raise ValueError(f"Unknown model type: {name}")

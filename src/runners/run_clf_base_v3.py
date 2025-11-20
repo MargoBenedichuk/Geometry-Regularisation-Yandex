@@ -1,4 +1,3 @@
-# src/runners/run_clf_base_v2.py
 """
 Enhanced version with detailed metrics collection for training analysis.
 """
@@ -17,13 +16,13 @@ from src.utils.config import load_config
 from src.dataset.datasets import BalancedClassificationDataset, ClassificationDataset
 from src.dataset.dataloader import make_dataloader
 from src.dataset.splits import make_classification_splits
-from src.models.cnns import SimpleCNN
+from src.models.head_factory import build_model
 from src.metrics.task import compute_classification_metrics
 from src.regularization.geodesic_loss import compute_geodesic_loss
 from src.utils.registry import default_mnist_transform, resolve_target
 from src.vizualisation.vizualisator import save_interactive_projection, save_umap_projection
 from src.metrics.geodesic import compute_geodesic_summary
-from src.metrics.geometry import compute_geometry_summary
+from src.metrics.geometry_mark import compute_geometry_summary
 import matplotlib.pyplot as plt
 
 
@@ -114,11 +113,7 @@ def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
         
         # === 2. Model ===
         print("[INFO] Creating model...")
-        model = SimpleCNN(
-            input_shape=tuple(cfg.model.input_shape),
-            hidden_dim=cfg.model.hidden_dim,
-            num_classes=cfg.model.num_classes,
-        ).to(device)
+        model = build_model(cfg).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train.lr)
         
         # === 3. Metrics Collection ===
@@ -126,7 +121,8 @@ def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
         
         # === 4. Training Loop ===
         print("[INFO] Starting training...")
-        for epoch in range(cfg.train.epochs):
+        progress = tqdm(range(cfg.train.epochs), desc=f"Epoch: ", leave=False)
+        for epoch in  progress:
             model.train()
             running_loss = 0.0
             running_ce = 0.0
@@ -135,9 +131,9 @@ def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
             
             if train_balanced and hasattr(train_ds, "reshuffle"):
                 train_ds.reshuffle()
-            
+            # progress = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{cfg.train.epochs}", leave=False)
             for xb, yb in train_loader:
-            print(f"Epoch {epoch + 1}/{cfg.train.epochs} - Batch Step")
+                # print(f"Epoch {epoch + 1}/{cfg.train.epochs} - Batch Step")
                 xb, yb = xb.to(device), yb.to(device)
                 logits, latents = model(xb, return_features=True)
                 

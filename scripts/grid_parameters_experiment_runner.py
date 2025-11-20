@@ -5,7 +5,6 @@ import yaml
 import subprocess
 from datetime import datetime
 from itertools import product
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from filelock import FileLock
 
@@ -21,7 +20,7 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 
 # === Параметры перебора ===
 DATASETS = ["mnist", "cifar10", "imagenet"]
-MODELS = ["simple_cnn", "resnet50", "resnet101"]
+MODELS = [ "resnet50", "resnet101"]
 SEEDS = [42, 2025]
 LOSSES = ["none", "geodesic", "geometry", "combined"]  # "combined" = geodesic + geometry
 
@@ -161,10 +160,8 @@ def main():
         entries = [r for r in json.load(f) if r["status"] != "done"]
 
     print(f"[INFO] Запуск {len(entries)} экспериментов...")
-    with ProcessPoolExecutor(max_workers=min(4, os.cpu_count() or 2)) as pool:
-        futures = [pool.submit(run_experiment, entry) for entry in entries]
-        for fut in as_completed(futures):
-            fut.result()
+    for entry in entries:
+        run_experiment(entry)
 
 if __name__ == "__main__":
     main()
