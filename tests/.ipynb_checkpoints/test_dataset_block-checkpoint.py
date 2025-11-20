@@ -23,8 +23,15 @@ def test_classification_dataset():
     dataset = get_dummy_dataset()
     x, y = dataset[0]
     assert isinstance(x, torch.Tensor)
-    assert isinstance(y, int)
-    assert hasattr(dataset, 'targets')
+    assert isinstance(y, (int, torch.Tensor))  # Поддержка Tensor-меток
+
+    # Проверим, что targets или labels доступны
+    try:
+        targets = dataset.targets
+        assert isinstance(targets, list) or torch.is_tensor(targets)
+    except AttributeError:
+        assert False, "Dataset does not expose targets or labels"
+
 
 
 def test_make_dataloader():
