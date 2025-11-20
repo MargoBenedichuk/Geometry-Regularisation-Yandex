@@ -1,0 +1,14 @@
+artifact_uri: file:///home/rita/Geometry-Regularisation-Yandex/mlruns/747875525039669758/0132bdf9ce244505b53dbd92c0d52fe3/artifacts
+end_time: 1763624380927
+entry_point_name: ''
+experiment_id: '747875525039669758'
+lifecycle_stage: active
+run_id: 0132bdf9ce244505b53dbd92c0d52fe3
+run_name: melodic-chimp-498
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1763624343122
+status: 3
+tags: []
+user_id: rita

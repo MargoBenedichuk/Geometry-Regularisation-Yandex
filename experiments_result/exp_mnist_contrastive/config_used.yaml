@@ -1,0 +1,40 @@
+experiment_name: mnist_contrastive
+seed: 42
+device: cuda
+dataset:
+  name: mnist
+  root: ./data
+  val_ratio: 0.2
+  transform: src.utils.registry.default_mnist_transform
+  base: src.utils.registry.get_mnist
+  balanced_dataset:
+    n_classes: 10
+    n_samples: 10
+    seed: 42
+train:
+  batch_size: 100
+  epochs: 1
+  lr: 0.001
+model:
+  type: simple_cnn
+  input_shape:
+  - 1
+  - 28
+  - 28
+  hidden_dim: 128
+  num_classes: 10
+  head_type: linear
+regularization:
+  type: geometric
+  weight: 0.1
+  metric: contrastive
+  temperature: 0.1
+logging:
+  mlflow: true
+  project: geometric-regularization
+  log_dir: ./experiments_result/
+output:
+  save_metrics: true
+  save_latents: true
+  save_umap: true
+  dir: ./experiments_result/exp_mnist_contrastive/
