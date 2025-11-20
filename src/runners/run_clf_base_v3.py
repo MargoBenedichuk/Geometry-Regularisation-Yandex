@@ -73,11 +73,17 @@ def run_experiment(cfg_path: str, exp_dir: str, experiment_name: str = None):
         if dataset_factory is None:
             raise ValueError("cfg.dataset.base must point to a dataset constructor")
         
-        dataset_kwargs = dict(root=cfg.dataset.root, train=True, download=True)
+        ddataset_kwargs = dict(root=cfg.dataset.root, train=True)
+
+        if "imagenet" not in cfg.dataset.base.lower():
+            dataset_kwargs["download"] = True
+
         try:
             base_ds = dataset_factory(**dataset_kwargs)
         except TypeError:
-            base_ds = dataset_factory()
+            base_ds.pop("download", None)
+            base_ds = dataset_factory(**dataset_kwargs)
+
         
         transform_resolver = resolve_target(getattr(cfg.dataset, "transform", None))
         transform = (transform_resolver() if transform_resolver else default_mnist_transform())

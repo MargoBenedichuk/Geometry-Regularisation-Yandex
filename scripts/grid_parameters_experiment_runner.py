@@ -159,15 +159,7 @@ def main():
     with open(REGISTRY_PATH) as f:
         entries = [r for r in json.load(f) if r["status"] != "done"]
 
-    cleaned = []
-    for r in entries:
-        sig = r.get("signature", {})
-        if "loss" not in sig:
-            print("[CLEANUP] Removing outdated entry:", r)
-            continue
-        cleaned.append(r)
-
-    entries = [r for r in cleaned if r["status"] != "done"]
+    
 
     print(f"[INFO] Запуск {len(entries)} экспериментов...")
     for entry in entries:
