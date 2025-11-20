@@ -39,30 +39,3 @@ class SimpleCNN(nn.Module):
         if return_features:
             return logits, z
         return logits
-
-
-class ResNetBackbone(nn.Module):
-    """
-    ResNet-based backbone (50 or 101), без последнего классификатора.
-    """
-    def __init__(self, variant: str = "resnet50", hidden_dim: int = 128, num_classes: int = 10):
-        super().__init__()
-        if variant == "resnet50":
-            base = resnet50(weights=None)
-        elif variant == "resnet101":
-            base = resnet101(weights=None)
-        else:
-            raise ValueError("Unsupported ResNet variant. Choose 'resnet50' or 'resnet101'.")
-
-        self.encoder = nn.Sequential(*list(base.children())[:-1])  # Remove final FC
-        self.fc = nn.Linear(base.fc.in_features, hidden_dim)
-        self.head = nn.Linear(hidden_dim, num_classes)
-
-    def forward(self, x: torch.Tensor, return_features: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-        x = self.encoder(x)
-        x = torch.flatten(x, 1)
-        z = self.fc(x)
-        logits = self.head(z)
-        if return_features:
-            return logits, z
-        return logits
