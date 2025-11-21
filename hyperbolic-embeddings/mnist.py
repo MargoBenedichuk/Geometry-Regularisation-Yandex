@@ -11,6 +11,8 @@ from torchvision import datasets, transforms
 import hyptorch.nn as hypnn
 
 import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
 
 
 class Net(nn.Module):
@@ -206,34 +208,65 @@ def main():
     model = Net(args).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
-    losses = []
-    val_accuracy = []
-    val_loss = []
+    train_loss = []
+    test_accuracy = []
+    test_loss = []
     for epoch in range(1, args.epochs + 1):
         ls = train(args, model, nn.NLLLoss(), device, train_loader, optimizer, epoch)
         v, a = test(args, model, nn.NLLLoss(reduction='sum'), device, test_loader)
-        losses += ls
-        val_accuracy.append(a)
-        val_loss.append(v)
+        train_loss.append(sum(ls) / len(ls))
+        test_accuracy.append(a)
+        test_loss.append(v)
 
-    idx = list(range(len(val_loss)))
-    idx2 = list(range(len(losses)))
+    # --- 1. Настройка стиля ---
+    # Используем стиль из seaborn для приятного внешнего вида
+    sns.set_style("whitegrid")
+    # Устанавливаем хороший шрифт
+    plt.rcParams['font.family'] = 'DejaVu Sans'
 
-    fig, axes = plt.subplots(1, 3, figsize=(16, 6))
+    # --- 2. Генерация реалистичных данных ---
+    # В реальной жизни вы будете использовать свои данные из history.history (Keras) или логов
+    epochs = np.arange(1, args.epochs+1)
 
-    ax = axes.flatten()
-    ax[0].plot(idx2, losses, label="Лосс на трейне")
-    ax[0].set_xlabel("Итерация")
-    ax[0].legend()
+# --- 3. Создание фигуры и осей ---
+    # Создаем фигуру с двумя графиками (один под другим)
+    # figsize задает размер в дюймах для хорошего разрешения
+    fig, axes = plt.subplots(2, 1, figsize=(12, 10))
 
-    ax[1].plot(idx, val_loss, label="Лосс на тесте")
-    ax[1].set_xlabel("Эпоха")
-    ax[1].legend()
+    # --- 4. Построение графиков ---
 
-    ax[2].plot(idx, val_accuracy, label="Акураси на тесте")
-    ax[2].set_xlabel("Эпоха")
-    ax[2].legend()
-    fig.savefig(args.savefig)
+    # График 1: Потери (Loss)
+    axes[0].plot(epochs, train_loss, label='Ошибка на обучении (Train Loss)', color='#4E79A7', marker='o', markersize=4, linestyle='-')
+    axes[0].plot(epochs, test_loss, label='Ошибка на тесте (Test Loss)', color='#F28E2B', marker='x', markersize=4, linestyle='--')
+
+    # Настройка первого графика
+    axes[0].set_title('Динамика функции потерь', fontsize=16, pad=20)
+    axes[0].set_xlabel('Эпохи', fontsize=12)
+    axes[0].set_ylabel('Loss', fontsize=12)
+    axes[0].legend(loc='upper right', fontsize=12)
+    axes[0].grid(True, which='both', linestyle='--', linewidth=0.5)
+
+
+    # График 2: Точность (Accuracy)
+    axes[1].plot(epochs, test_accuracy, label='Точность на тесте (Test Accuracy)', color='#59A14F', marker='s', markersize=4, linestyle='-')
+
+    # Настройка второго графика
+    axes[1].set_title('Динамика точности', fontsize=16, pad=20)
+    axes[1].set_xlabel('Эпохи', fontsize=12)
+    axes[1].set_ylabel('Accuracy', fontsize=12)
+    axes[1].legend(loc='lower right', fontsize=12)
+    axes[1].grid(True, which='both', linestyle='--', linewidth=0.5)
+    # Устанавливаем пределы по оси Y для точности от 0 до 1
+    axes[1].set_ylim(0, 1.05)
+
+
+    # --- 5. Финальные штрихи ---
+    # Автоматически подгоняем элементы, чтобы они не пересекались
+    # rect=[left, bottom, right, top] - оставляет место для общего заголовка
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    # Показать график
+    plt.show()
 
     if args.save_model:
         torch.save(model.state_dict(), "mnist_cnn.pt")
