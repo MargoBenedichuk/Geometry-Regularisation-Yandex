@@ -243,7 +243,7 @@ def plot_training_curves(results_with_custom, results_baseline, output_dir):
     plt.close()
 
 
-regularization = "geometric_mark" ### "geodesic"
+regularization = "density_topological" ### "geodesic"
 
 def main():
     """
